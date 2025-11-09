@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Callisto Skill — AI Talent Analyzer</title>
+
+  <!-- ✅ Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ✅ Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* === HEADER BOX === */
+    .header-box {
+      @apply w-full text-white py-6 shadow-2xl border border-indigo-200;
+      border-radius: 2rem; /* extra curved edges */
+      background: linear-gradient(135deg, #4f46e5, #6366f1, #818cf8);
+      background-size: 200% 200%;
+      animation: gradientShift 6s ease infinite;
+      backdrop-filter: blur(10px);
+    }
+
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* === APP CONTAINER === */
+    .app-wrapper {
+      transition: all 0.5s ease;
+    }
+    .app-expanded {
+      max-width: 95rem !important;
+      transform: scale(1.02);
+    }
+
+    /* === POPUP === */
+    .popup {
+      @apply fixed inset-0 bg-black/40 flex items-center justify-center z-50 hidden;
+      animation: fadeIn 0.3s ease forwards;
+    }
+    .popup-content {
+      @apply bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl p-8 max-w-3xl w-[90%] relative animate-fadeInUp overflow-y-auto max-h-[80vh];
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* === CLOSE BUTTON === */
+    .close-btn {
+      @apply absolute top-3 right-4 text-2xl text-gray-400 hover:text-rose-500 transition;
+    }
+
+    /* === INTERACTIVE BUTTONS === */
+    .glow-btn {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(90deg, #eef2ff, #ede9fe);
+      transition: all 0.3s ease;
+    }
+    .glow-btn::before {
+      content: '';
+      position: absolute;
+      top: var(--y);
+      left: var(--x);
+      transform: translate(-50%, -50%);
+      width: 0;
+      height: 0;
+      background: radial-gradient(circle closest-side, rgba(99,102,241,0.4), transparent);
+      transition: width 0.3s ease, height 0.3s ease;
+      border-radius: 50%;
+    }
+    .glow-btn:hover::before {
+      width: 200px;
+      height: 200px;
+    }
+    .glow-btn:active {
+      background: linear-gradient(90deg, #6366f1, #4f46e5);
+      color: white;
+    }
+
+    /* === POPUP TEXT CARD === */
+    .result-card {
+      @apply bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 shadow-inner text-gray-700 leading-relaxed;
+    }
+  </style>
+</head>
+
+<body class="bg-gradient-to-br from-indigo-50 via-white to-indigo-100 min-h-screen font-sans text-gray-800 overflow-x-hidden">
+  <div id="app" class="app-wrapper max-w-7xl mx-auto p-6 space-y-8">
+
+    <!-- === HEADER === -->
+    <header class="text-center">
+      <div class="header-box mx-auto px-8">
+        <h1 class="text-5xl font-extrabold tracking-tight">Callisto Skill Sense<span class="text-indigo-200">+</span></h1>
+        <p class="text-lg text-indigo-100 font-medium mt-2">AI Talent Analyzer</p>
+      </div>
+    </header>
+
+    <!-- === INPUT SECTION === -->
+    <section class="bg-white/80 backdrop-blur-md border border-indigo-100 shadow-lg rounded-2xl p-6 space-y-4">
+      <div>
+        <label for="active-input" class="block text-sm font-semibold text-gray-700">
+          Paste Resume / Linkedln link
+        </label>
+        <textarea id="active-input"
+          rows="8"
+          class="mt-2 w-full border border-gray-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          placeholder="Paste résumé, professional profile, or LinkedIn summary..."></textarea>
+      </div>
+
+      <!-- === BUTTONS === -->
+      <div class="flex flex-wrap gap-3">
+        <button id="analyze-btn" class="glow-btn px-4 py-2 rounded-lg border border-indigo-300">Analyze Skills</button>
+        <button id="mood-btn" class="glow-btn px-4 py-2 rounded-lg border border-indigo-300">SkillMood </button>
+        <button id="fusion-btn" class="glow-btn px-4 py-2 rounded-lg border border-indigo-300">SkillFusion </button>
+        <button id="mirror-btn" class="glow-btn px-4 py-2 rounded-lg border border-indigo-300">SkillMirror </button>
+        <button id="match-btn" class="glow-btn px-4 py-2 rounded-lg border border-indigo-300">SkillMatch </button>
+        <button id="spark-btn" class="glow-btn px-4 py-2 rounded-lg border border-indigo-300">SkillSpark </button>
+      </div>
+    </section>
+  </div>
+
+  <!-- === POPUP === -->
+  <div id="popup" class="popup">
+    <div id="popup-content" class="popup-content">
+      <button id="popup-close" class="close-btn">&times;</button>
+      <h2 id="popup-title" class="text-2xl font-bold mb-4 text-indigo-700"></h2>
+      <div id="popup-body" class="result-card"></div>
+    </div>
+  </div>
+
+  <!-- ✅ GEMINI API KEY -->
+  <script>
+    window.__gemini_api_key = "AIzaSyDfnbgvRbbHlmn8JQhgFdpo7WTtF7R3sqs";
+  </script>
+
+  <script type="module">
+    const GEMINI_KEY = window.__gemini_api_key;
+    const model = "gemini-2.0-flash";
+    const popup = document.getElementById("popup");
+    const popupTitle = document.getElementById("popup-title");
+    const popupBody = document.getElementById("popup-body");
+    const app = document.getElementById("app");
+    let moodChart;
+
+    /** === Dynamic Glow === **/
+    document.querySelectorAll(".glow-btn").forEach(btn => {
+      btn.addEventListener("mousemove", e => {
+        const rect = e.target.getBoundingClientRect();
+        e.target.style.setProperty("--x", ${e.clientX - rect.left}px);
+        e.target.style.setProperty("--y", ${e.clientY - rect.top}px);
+      });
+    });
+
+    /** === Gemini API Call === **/
+    async function callGemini(promptSystem, userInput) {
+      const url = https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY};
+      const body = { contents: [{ role: "user", parts: [{ text: ${promptSystem}\n\n${userInput} }] }] };
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "Gemini API Error");
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+    }
+
+    /** === Popup Controls === **/
+    function openPopup(title, content) {
+      popupTitle.textContent = title;
+      popupBody.innerHTML = <div class='result-card'>${content}</div>;
+      popup.classList.remove("hidden");
+      app.classList.add("app-expanded");
+    }
+    function closePopup() {
+      popup.classList.add("hidden");
+      app.classList.remove("app-expanded");
+    }
+    document.getElementById("popup-close").addEventListener("click", closePopup);
+    popup.addEventListener("click", (e) => { if (e.target === popup) closePopup(); });
+
+    /** === Input Helper === **/
+    const getInput = () => {
+      const text = document.getElementById("active-input").value.trim();
+      if (!text) { alert("Please paste résumé text first!"); return null; }
+      return text;
+    };
+
+    /** === Button Handlers === **/
+    const handlers = {
+      analyze: { id: "analyze-btn", title: "Extracted Skills", sys: "Extract and list all key technical and soft skills." },
+      fusion: { id: "fusion-btn", title: "SkillFusion ", sys: "Combine related abilities into creative hybrid skills." },
+      mirror: { id: "mirror-btn", title: "SkillMirror ", sys: "Predict a 2–3 year career growth path." },
+      match: { id: "match-btn", title: "SkillMatch ", sys: "Match résumé to 3–5 suitable job titles." },
+      spark: { id: "spark-btn", title: "SkillSpark ", sys: "Give 3 short creative insights about this professional." }
+    };
+
+    Object.values(handlers).forEach(({ id, title, sys }) => {
+      document.getElementById(id).addEventListener("click", async () => {
+        const input = getInput(); if (!input) return;
+        openPopup(title, "⏳ Processing...");
+        const res = await callGemini(sys, input);
+        popupBody.innerHTML = <div class='result-card'>${res.replace(/\n/g, "<br>")}</div>;
+      });
+    });
+
+    /** === SkillMood Chart === **/
+    document.getElementById("mood-btn").addEventListener("click", async () => {
+      const input = getInput(); if (!input) return;
+      openPopup("SkillMood  — Emotional Skill Profile", " Analyzing tone...");
+
+      const sys = `Analyze this résumé and return JSON like:
+      {
+        "Confidence": 0–100,
+        "Creativity": 0–100,
+        "Growth": 0–100,
+        "Leadership": 0–100,
+        "Tagline": "short inspiring career phrase"
+      }`;
+
+      const res = await callGemini(sys, input);
+      const jsonMatch = res.match(/\{[\s\S]*\}/);
+      let moodData = { Confidence: 25, Creativity: 25, Growth: 25, Leadership: 25, Tagline: "Undefined" };
+      if (jsonMatch) { try { moodData = JSON.parse(jsonMatch[0]); } catch {} }
+
+      const total = moodData.Confidence + moodData.Creativity + moodData.Growth + moodData.Leadership;
+      const factor = 100 / total;
+      ["Confidence", "Creativity", "Growth", "Leadership"].forEach(k => moodData[k] = Math.round(moodData[k] * factor));
+
+      popupBody.innerHTML = `
+        <p class="text-center text-gray-700 mb-3 font-semibold italic">${moodData.Tagline}</p>
+        <canvas id="mood-chart" class="w-full h-64"></canvas>
+        <p class="text-sm text-gray-600 text-center mt-3">
+          Confidence: <b>${moodData.Confidence}%</b> • Creativity: <b>${moodData.Creativity}%</b> • Growth: <b>${moodData.Growth}%</b> • Leadership: <b>${moodData.Leadership}%</b>
+        </p>
+      `;
+
+      const ctx = document.getElementById("mood-chart");
+      if (moodChart) moodChart.destroy();
+      moodChart = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+          labels: ["Confidence", "Creativity", "Growth", "Leadership"],
+          datasets: [{
+            data: [moodData.Confidence, moodData.Creativity, moodData.Growth, moodData.Leadership],
+            backgroundColor: ["#6366F1", "#F97316", "#22C55E", "#EAB308"]
+          }]
+        },
+        options: {
+          plugins: { legend: { position: "bottom" } },
+          cutout: "70%"
+        }
+      });
+    });
+  </script>
+</body>
+</html>
